@@ -1,0 +1,18 @@
+div.cell-output {
+    background-color: lightblue;
+}
+
+/* css styles */
+@font-face {
+    font-family: 'Lato';
+    src: url("fonts/lato.ttf") format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Roboto Mono';
+    src: url("fonts/robotoMono.ttf") format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}

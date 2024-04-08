@@ -1,0 +1,672 @@
+---
+title: "Reliability and measurement error in psychometrics"
+subtitle: "An applied example from Rasch Measurement Theory"
+title-block-banner: "#009ca6"
+title-block-banner-color: "#FFFFFF"
+author: 
+  name: Magnus Johansson
+  affiliation: RISE Research Institutes of Sweden
+  affiliation-url: https://www.ri.se/shic
+  orcid: 0000-0003-1669-592X
+date: last-modified
+date-format: iso
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    toc-title: "Table of contents"
+    embed-resources: true
+    standalone: true
+    page-layout: full
+    mainfont: 'Lato'
+    monofont: 'Roboto Mono'
+    code-overflow: wrap
+    code-fold: show
+    code-tools: true
+    code-link: true
+    number-sections: true
+    fig-dpi: 96
+    fig-cap-location: top
+    layout-align: left
+    linestretch: 1.6
+    theme: [materia, custom.scss]
+    css: styles.css
+    license: CC BY
+    email-obfuscation: javascript
+  pdf:
+    papersize: a4
+    documentclass: report 
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: true
+editor_options: 
+  markdown: 
+    wrap: 72
+  chunk_output_type: console
+bibliography: 
+  - references.bib
+  - grateful-refs.bib
+---
+
+## Introduction
+
+::: callout-note
+**Purposes of writing this text:** 
+
+- to provide an applied example of how to estimate
+latent/factor scores (thetas) and their Standard Error of Measurement
+(SEM). 
+- demonstrate how SEM relates to the true score, based on
+simulation.
+- test the functions in [`brms`](https://cran.r-project.org/web/packages/brms/index.html) that enables one to specify
+measurement error in a regression model.
+:::
+
+This post is mainly about the Standard Error of Measurement (SEM) metric
+estimated by Item Response Theory (IRT)/Rasch theta estimation tools, but since this will
+probably not be familiar to most readers I will to provide some
+additional information and context.
+
+I write this post primarily from the perspective of psychological
+measurement using questionnaires with multiple items to assess a latent
+variable, such as a depression or well-being questionnaire.
+
+First, I need to point out that the Rasch measurement model allows one
+to estimate reliability properties of the set of items themselves,
+independent of a sample. This may seem like a strange thing to many
+readers, especially if you mostly have experience with psychometrics
+within the Classical Test Theory (CTT) paradigm (factor analysis and
+other related methods).
+
+Second, the estimated SEM in Rasch/IRT varies across the latent
+continuum, it is not a constant point estimate, nor is it the same for
+every individual [@samejima1994]. The Fisher information function is
+used to estimate a standard error dependent on location on the latent
+continuum [@kreiner2012]. This is often described in a curve showing the Test Information Function (see @fig-tifexample). The connection between item threshold locations and TIF can also be seen by reviewing the targeting figure (@fig-targeting) and its middle section that aggregates the threshold locations.
+
+To summarise, here are two things regarding CTT/CFA methods that are not
+unknown but very seldom discussed:
+
+-   reliability within CTT is sample dependent. You have most likely
+    never read a CTT psychometrics paper that provides information about
+    the reliability of the measure or test itself. 
+      - This is due to the
+    inability of the measurement model to separate person and item
+    properties (see ["specific objectivity"](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22specific+objectivity%22)). 
+      - This is also a problem with IRT models with more than one parameter[^1].
+-   reliability within CTT is always[^2] a constant value claimed to be
+    the same for all participants at all levels of the latent variable.
+    (I think this is an unreasonable assumption.)
+    
+There has been a lot of discussion within CTT about
+reliability metrics during the last 15 years or so, mostly justified
+critique of Cronbach’s alpha [i.e @sijtsma2008; @mcneish2018;
+@flora2020; @cortina2020]. But also mostly proposing other sample
+dependent metrics that provide a point estimate of reliability (some
+argue for also presenting some form of confidence interval).
+
+This is not to say that we should not talk about sample reliability, we absolutely should! But it is important to differentiate between test/measure properties and sample properties. This is particularly important in the context of psychometric analyses and the "validation" of measures, where the intent usually is for others to be able to make use of a measure.
+
+If you are interested in learning more about psychometrics and IRT/Rasch measurement models, you might find these resources helpful:
+
+- [Intro slides](https://pgmj.github.io/RaschIRTlecture/slides.html) that are rather verbose and should help clarify the basic concepts.
+- [Our preprint](https://doi.org/10.31219/osf.io/3htzc) on psychometric criteria, which also includes a Rasch psychometric analysis reporting checklist.
+- The [package vignette](https://pgmj.github.io/raschrvignette/RaschRvign.html) for the [`RISEkbmRasch`](https://github.com/pgmj/RISEkbmRasch) R package.
+
+[^1]: This is because the discrimination parameter (2PL, GRM, etc) is also sample
+    specific/dependent. See Stemler & Naples [-@stemler2021], figure 8,
+    for a nice explanation and case example. One exception exists for the 3PL model: if the pseudo-guessing parameter is constant across all items, sample
+    independence is upheld [@jiao2023].
+
+[^2]: Except CME/BME methods [@kroc2020], but I have never seen those
+    applied or reported in psychometric CTT papers.
+
+## Setup
+
+Many of the functions used in this post are available in my R package for Rasch analysis, [`RISEkbmRasch`](https://github.com/pgmj/RISEkbmRasch), including the function that simulates response data. The package is not available on CRAN, see below (or the link) for installation instructions.
+
+```{r}
+# You need to use devtools or remotes to install the package from GitHub.
+# First install devtools by:
+# install.packages('devtools')
+# then 
+# devtools::install_github("pgmj/RISEkbmRasch", dependencies = TRUE)
+library(RISEkbmRasch) # this also loads a bunch of other packages
+library(tidyverse)
+library(eRm)
+library(catR)
+library(readxl)
+library(janitor)
+library(tinytable)
+library(faux)
+library(ggrain)
+library(patchwork)
+library(lme4)
+library(brms)
+library(modelsummary)
+library(broom.mixed)
+
+### some commands exist in multiple packages, here we define preferred ones that are frequently used
+select <- dplyr::select
+count <- dplyr::count
+rename <- dplyr::rename
+
+# get theming/colors
+source("RISE_theme.R")
+extrafont::loadfonts(quiet = TRUE)
+```
+
+We'll use data and item parameters for the Perceived Stress Scale's
+seven negative items [@rozental2023].
+
+```{r}
+df.all <- read_excel("data/Swedish_PSS_Rasch_analysis.xlsx") %>% 
+  select(starts_with("PSS"))
+
+names(df.all) <- paste0("q",c(1:14))
+
+final_items <- c("q1","q2","q3","q8","q11","q12","q14")
+
+df <- df.all %>% 
+  select(all_of(final_items))
+
+```
+
+## Ordinal/interval transformation table
+
+```{r}
+#| label: tbl-ordint
+#| tbl-cap: Ordinal/interval transformation table
+RIscoreSE(df, score_range = c(-5,5))
+```
+
+This provides us with a lookup table (@tbl-ordint) for transforming ordinal sum scores
+from the seven items to logit scores, with their respective SEM. Multiplying SEM by
+1.96 gives us a 95% confidence interval. Logit scores and SEM are
+estimated using the unbiased Weighted Likelihood method [@warm1989].
+
+The lookup table works for respondents with complete response data. If
+you have respondents with missing responses the estimation method we
+will use below will take this into account when estimating the SEM. No
+need for imputation.
+
+```{r}
+#| label: fig-ordint
+#| fig-cap: 'Ordinal sum scores and corresponding interval scores with 95% CI'
+RIscoreSE(df, score_range = c(-5,5), output = "figure", error_multiplier = 1.96)
+```
+
+@fig-ordint illustrates the transformation table
+information. We can also look at the SEM separately, across the latent
+variable continuum.
+
+```{r}
+#| label: fig-sem
+#| fig-cap: 'Measurement error across the latent continuum'
+ord_int_table<- RIscoreSE(df, 
+                          score_range = c(-5,5), 
+                          output = "dataframe") %>% 
+  janitor::clean_names() 
+  
+ord_int_table %>% 
+  ggplot(aes(x = logit_score, y = logit_std_error)) +
+  geom_point() +
+  geom_line() +
+  coord_cartesian(ylim = c(0,1.6), xlim = c(-5,5)) +
+  scale_x_continuous(breaks = seq(-5,5,1)) +
+  labs(x = "Interval (logit) score",
+       y = "Measurement error")
+```
+
+## Simulation
+
+We'll now simulate a dataset with 1000 respondents based on the item
+parameters and a vector of latent/factor scores (thetas). Then we'll
+estimate thetas and SEM based on the response data generated. Finally,
+we'll look at the coverage of estimated values compared to the input
+vector of scores.
+
+::: callout-note
+This is just a single simulated dataset for illustration, just as the regression example below also only uses one dataset. This is not a simulation study meant to show generalizable results. As such, the results should be interpreted with care. However, the code provided could be helpful if you want to conduct such as study.
+:::
+
+### Input parameters
+
+The item parameters need to be in a matrix object, with items as rows
+and their thresholds (which may vary in numbers) as columns.
+
+```{r}
+# read item parameters file
+item_params <- read_csv("data/itemParameters.csv") %>% 
+  as.matrix()
+
+item_params
+```
+
+### Targeting
+
+Just to get a picture of how the item category thresholds are distributed, we can use the data from our paper to produce a targeting figure.
+
+```{r}
+#| label: fig-targeting
+#| fig-cap: 'Targeting properties of the PSS-7'
+
+RItargeting(df)
+```
+
+
+### Simulating data
+
+Now we can use the item parameters to simulate data. We'll use `rnorm()`
+with a mean that matches the item parameters and SD = 1.5, and generate
+2000 theta values. Then these are used to simulate response data for the
+7 items.
+
+```{r}
+set.seed(1437)
+
+# simulation function needs item parameters as a list object
+itemlist <- list(
+  i1 = list(item_params[1,]),
+  i2 = list(item_params[2,]),
+  i3 = list(item_params[3,]),
+  i4 = list(item_params[4,]),
+  i5 = list(item_params[5,]),
+  i6 = list(item_params[6,]),
+  i7 = list(item_params[7,])
+)
+
+# randomly generated normal distribution of thetas
+nsim = 2000
+inputThetas <- rnorm(n = nsim, 
+                     mean = mean(item_params), # 0.57 
+                     sd = 1.5)
+
+# simulate response data based on thetas and items above
+simData <- SimPartialScore(
+  deltaslist = itemlist,
+  thetavec = inputThetas
+) %>%
+  as.data.frame()
+```
+
+### Estimating theta & SEM
+
+Next, we estimate theta values and their SEM from the response data,
+using the known item parameters. This is how you would/should use a
+calibrated item set with real data as well.
+
+```{r}
+# estimate theta values.
+est_thetas <- RIestThetas(simData, 
+                          itemParams = item_params, 
+                          theta_range = c(-5,5)
+                          )
+# estimate SEM
+est_sem <- 
+  map_vec(est_thetas, ~ semTheta(thEst = .x,
+                                 it = item_params,
+                                 model = "PCM",
+                                 method = "WL",
+                                 range = c(-5, 5)))
+                   
+```
+
+## Results
+
+```{r}
+# get all variables in the same dataframe
+sim_data <- simData %>% 
+  add_column(est_thetas = est_thetas,
+             est_sem = est_sem,
+             input_thetas = inputThetas)
+
+```
+
+### Input vs estimated thetas
+
+```{r}
+#| label: fig-simestt
+#| fig-cap: Comparing input and estimated theta values
+sim_data %>% 
+  add_column(id = c(1:nsim)) %>% 
+  pivot_longer(c(input_thetas,est_thetas)) %>% 
+  ggplot(aes(x = name, y = value, fill = name)) +
+  geom_rain(id.long.var = "id", alpha = 0.7) +
+  scale_y_continuous(limits = c(-5,5), breaks = seq(-5,5,1)) +
+  guides(fill = "none") +
+  theme_rise() +
+  labs(x = "", y = "Theta (logit scale)")
+```
+
+As you can see, the generated sample of "input_thetas" has a continuous gaussian distribution, while the estimated thetas are limited to certain values. This is due the the number and distribution of items and item category thresholds (see @fig-targeting).
+
+### Coverage
+
+```{r}
+#| label: tbl-coverage
+#| tbl-cap: Expected and actual coverage in sample
+cov_data <- sim_data %>% 
+  mutate(absdiff = abs(est_thetas - input_thetas)) %>%
+  mutate(coverage_95 = factor(ifelse(absdiff < 1.96*est_sem, 1, 0)),
+         coverage_90 = factor(ifelse(absdiff < 1.645*est_sem, 1, 0)),
+         coverage_75 = factor(ifelse(absdiff < 1.15*est_sem, 1, 0))) %>% 
+  pivot_longer(cols = c(coverage_95, coverage_90, coverage_75),
+               names_to = "coverage",
+               values_to = "coverage_n") %>% 
+  count(coverage_n, by = coverage) %>% 
+  filter(coverage_n == 1) %>% 
+  mutate(`Actual coverage` = n/nsim*100, .before = "n") %>% 
+  select(!c(coverage_n,n,by)) %>% 
+  add_column(`Expected coverage` = c("75%","90%","95%"))
+
+uncov <- 100-cov_data[3,1] %>% pull()
+tt(cov_data)
+```
+
+```{r}
+#| label: fig-estsem
+#| fig-cap: Distribution of measurement error across the estimated theta values
+sim_data %>% 
+  mutate(error = est_thetas - input_thetas,
+         absdiff = abs(est_thetas - input_thetas),
+         coverage_95 = factor(ifelse(absdiff < 1.96*est_sem, 1, 0))
+         ) %>% 
+  mutate_if(is.numeric, round, 2) %>% 
+  left_join(.,ord_int_table %>% mutate_if(is.numeric, round, 2), by = join_by("est_thetas" == "logit_score")) %>% 
+  ggplot(aes(x = est_thetas, y = error)) +
+  geom_errorbar(aes(ymin = 0 - (1.96 * logit_std_error),
+                    ymax = 0 + (1.96 * logit_std_error)),
+                width = 0.1, color = "darkgrey", alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(aes(color = coverage_95), alpha = 0.6) +
+  labs(title = "",
+       x = "Estimated theta values",
+       y = "Measurement error") +
+  guides(color = "none") +
+  labs(caption = paste0("Red dots (",round(uncov,2),"%) indicate estimated thetas outside of 95% confidence interval (SEM * 1.96, indicated by grey error bars).")) +
+  theme_rise()
+
+```
+
+### SEM and Mean Absolute Error (MAE)
+
+```{r}
+sim_data %>% 
+  mutate(absdiff = abs(est_thetas - input_thetas)) %>% 
+  pivot_longer(cols = c(absdiff,est_sem)) %>% 
+  mutate(name = dplyr::recode(name, "est_sem" = "SEM",
+                       "absdiff" = "MAE")) %>% 
+  
+  ggplot(aes(x = est_thetas, y = value, color = name, group = name)) +
+  geom_point() +
+  guides(fill = "none") +
+  labs(x = "Estimated theta value",
+       y = "Error")
+```
+
+
+```{r}
+sim_data %>% 
+  mutate(absdiff = abs(est_thetas - input_thetas)) %>% 
+  summarise(mae = mean(absdiff))
+```
+
+```{r}
+mean(sim_data$est_sem)
+```
+
+```{r}
+#| label: fig-tifexample
+#| fig-cap: Test Information Function for simulated response data
+#| fig-width: 8
+sim_data %>% 
+  select(starts_with("i")) %>% 
+  select(!input_thetas) %>% 
+  RItif(samplePSI = TRUE)
+```
+
+## Regression with measurement error
+
+This is just exploratory, and I am no expert in Bayesian models, so please [let me know](mailto:magnus.p.johansson@ri.se) if something should be modified or if there are other models/tools that should be considered.
+
+There is, as far as I know, no implementation of a frequentist regression tool in R that allows one to specify a vector of measurement errors. I have been looking into this recently and found some interesting R packages (`galamm`, `mecor`, and `simex`), but none seem to be (easily) applicable for this type of data and setup.
+
+We'll simulate new data with two "time points", n = 200 each, that have mean
+theta locations 1 logit apart, SD = 1.5 for both groups, and ICC = 0.5. Then we'll run a mixed model. Since we only have two time points, we'll use random intercepts for id.
+
+```{r}
+# randomly generated normal distributions of thetas with correlation
+data <- rnorm_multi(n = 200, 
+                    mu = c(-0.5, +0.5),
+                    sd = c(1.5, 1.5),
+                    r = 0.5, 
+                    varnames = c("pre", "post"),
+                    empirical = FALSE)
+
+# light wrangling to get long format and an id variable
+data_long <- data %>% 
+  add_column(id = 1:(nrow(.))) %>% 
+  pivot_longer(cols = c("pre", "post"), 
+               names_to = "time", 
+               values_to = "input_theta") %>% 
+  mutate(time = dplyr::recode(time, "pre" = 0, "post" = 1))
+
+# simulate response data based on thetas and items above
+sim_data_g <- SimPartialScore(
+  deltaslist = itemlist,
+  thetavec = data_long$input_theta
+) %>%
+  as.data.frame()
+
+# estimate theta values.
+sim_data_g$est_theta <- RIestThetas(sim_data_g, 
+                                    itemParams = item_params, 
+                                    theta_range = c(-5,5))
+# estimate SEM
+sim_data_g$est_sem <- 
+  map_vec(sim_data_g$est_theta, ~ semTheta(thEst = .x,
+                                           it = item_params,
+                                           model = "PCM",
+                                           method = "WL",
+                                           range = c(-5, 5)))
+
+sim_data_g <- cbind(sim_data_g,data_long)
+```
+
+
+```{r}
+sim_data_g %>% 
+  group_by(time) %>% 
+  summarise(mean_input = mean(input_theta),
+            mean_estimated = mean(est_theta),
+            median_input = median(input_theta),
+            median_estimated = median(est_theta),
+            sd_input = sd(input_theta),
+            sd_estimated = sd(est_theta),
+            mad_input = mad(input_theta),
+            mad_estimated = mad(est_theta))
+```
+
+### Plot your data
+
+```{r}
+#| label: fig-rain
+#| fig-cap: Comparison of simulated and estimated theta values
+#| fig-height: 6
+
+fig_est_theta_rain <- sim_data_g %>% 
+  ggplot(aes(x = factor(time), y = est_theta, group = time)) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.8) +
+  geom_rain(id.long.var = "id",
+            fill = "lightblue", alpha = 0.7) +
+  scale_y_continuous(limits = c(-5,5), breaks = seq(-5,5,1)) +
+  theme_rise()
+
+fig_input_theta_rain <- sim_data_g %>% 
+  ggplot(aes(x = factor(time), y = input_theta, group = time)) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.8) +
+  geom_rain(id.long.var = "id",
+            fill = "lightpink", alpha = 0.7) +
+  scale_y_continuous(limits = c(-5,5), breaks = seq(-5,5,1)) +
+  theme_rise()
+
+fig_input_theta_rain / fig_est_theta_rain +
+  plot_layout(axes = "collect_x")
+```
+
+### Models
+
+We'll first make some models without measurement error, both with `lmer()`
+and `brm()`. First with the input parameters to get a reference model for both.
+
+I learnt about measurement error and brms in this excellent online book by [Solomon Kurz](https://solomonkurz.netlify.app/):
+<https://bookdown.org/content/4857/missing-data-and-other-opportunities.html#measurement-error>
+
+There are three different ways to specify measurement error, `se()`, `mi()`, and `me()`, where the last one seems to only be relevant for when you have measurement error on both predictors and outcome. Thus, we will use the two others.
+
+```{r}
+
+# reference model with input thetas
+lm_fit0 <- lmer(input_theta ~ time + (1 | id),
+              data = sim_data_g)
+
+# estimated thetas
+lm_fit1 <- lmer(est_theta ~ time + (1 | id),
+              data = sim_data_g)
+
+```
+
+```{r}
+#| output: false
+# put the data into a `list()`
+d <- list(
+  input_theta = sim_data_g$input_theta,
+  est_theta = sim_data_g$est_theta,
+  est_sem = sim_data_g$est_sem,
+  time = sim_data_g$time,
+  id = sim_data_g$id
+)
+
+# Input/simulated thetas
+b0_fit <- 
+  brm(data = d, 
+      family = gaussian,
+      input_theta ~ time + (1 | id),
+      prior = c(prior(normal(0, 3), class = Intercept),
+                prior(normal(0, 2), class = b),
+                prior(exponential(1), class = sigma),
+                prior(exponential(1 / 0.463), class = sd)
+                ),
+      iter = 2000, warmup = 1000, 
+      cores = 4, chains = 4,
+      seed = 15)
+
+# With estimated thetas
+
+b1_fit <- 
+  brm(data = d, 
+      family = gaussian,
+      est_theta ~ time + (1 | id),
+      prior = c(prior(normal(0, 3), class = Intercept),
+                prior(normal(0, 2), class = b),
+                prior(exponential(1), class = sigma),
+                prior(exponential(1 / 0.463), class = sd)
+                ),
+      iter = 2000, warmup = 1000, 
+      cores = 4, chains = 4,
+      seed = 15)
+
+
+# With measurement error using se()
+b2_fit <- 
+  brm(data = d, 
+      family = gaussian,
+      est_theta | se(est_sem, sigma = TRUE) ~ time + (1 | id),
+      prior = c(prior(normal(0, 3), class = Intercept),
+                prior(normal(0, 2), class = b),
+                prior(exponential(1), class = sigma),
+                prior(exponential(1 / 0.463), class = sd)
+                ),
+      iter = 2000, warmup = 1000, 
+      cores = 4, chains = 4,
+      seed = 15)
+
+# using mi()
+
+b3_fit <- 
+  brm(data = d, 
+      family = gaussian,
+      est_theta | mi(est_sem) ~ time + (1 | id),
+      prior = c(prior(normal(0, 3), class = Intercept),
+                prior(normal(0, 2), class = b),
+                prior(exponential(1), class = sigma),
+                prior(exponential(1 / 0.463), class = sd)
+                ),
+      iter = 2000, warmup = 1000, 
+      cores = 4, chains = 4,
+      seed = 15)
+```
+
+### Results
+
+`lmer()` models.
+
+```{r}
+#| label: tbl-lmresults
+#| tbl-cap: Results from lmer() models
+modelsummary(list("Reference model" = lm_fit0,
+                  "Estimated thetas" = lm_fit1))
+```
+
+
+```{r}
+#| label: fig-lmresults
+#| fig-cap: Results from lmer() models
+modelplot(list("Reference model" = lm_fit0,
+               "Estimated thetas" = lm_fit1))
+```
+
+`brm()` models.
+```{r}
+#| label: tbl-brmsresults
+#| tbl-cap: Results from brm() models
+
+modelsummary(list("Reference model" = b0_fit,
+                  "Estimated thetas" = b1_fit,
+                  "With se()" = b2_fit,
+                  "With mi()" = b3_fit))
+```
+
+```{r}
+#| label: fig-brmsresults
+#| fig-cap: Results from brm() models
+modelplot(list("Reference model" = b0_fit,
+                  "Estimated thetas" = b1_fit,
+                  "With se()" = b2_fit,
+                  "With mi()" = b3_fit))
+```
+
+
+## Software used
+
+```{r}
+library(grateful)
+pkgs <- cite_packages(cite.tidyverse = TRUE, 
+                      output = "table",
+                      bib.file = "grateful-refs.bib",
+                      include.RStudio = TRUE,
+                      out.dir = getwd())
+
+formattable(pkgs,
+            table.attr = 'class=\"table table-striped\" style="font-size: 15px; font-family: Lato; width: 80%"')
+
+```
+
+```{r}
+sessionInfo()
+```
+
+## References
