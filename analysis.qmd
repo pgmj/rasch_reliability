@@ -10,6 +10,7 @@ author:
   orcid: 0000-0003-1669-592X
 date: last-modified
 date-format: iso
+doi: '10.5281/zenodo.10944558'
 format: 
   html:
     toc: true
