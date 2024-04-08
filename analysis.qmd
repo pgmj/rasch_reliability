@@ -223,7 +223,7 @@ ord_int_table %>%
 
 ## Simulation
 
-We'll now simulate a dataset with 1000 respondents based on the item
+We'll now simulate a dataset with 2000 respondents based on the item
 parameters and a vector of latent/factor scores (thetas). Then we'll
 estimate thetas and SEM based on the response data generated. Finally,
 we'll look at the coverage of estimated values compared to the input
