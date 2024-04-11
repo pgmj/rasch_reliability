@@ -54,21 +54,20 @@ bibliography:
 ## Introduction
 
 ::: callout-note
-**Purposes of writing this text:** 
+**Purposes of writing this text:**
 
-- to provide an applied example of how to estimate
-latent/factor scores (thetas) and their Standard Error of Measurement
-(SEM). 
-- demonstrate how SEM relates to the true score, based on
-simulation.
-- test the functions in [`brms`](https://cran.r-project.org/web/packages/brms/index.html) that enables one to specify
-measurement error in a regression model.
+-   to provide an applied example of how to estimate latent/factor
+    scores (thetas) and their Standard Error of Measurement (SEM).
+-   demonstrate how SEM relates to the true score, based on simulation.
+-   test the functions in
+    [`brms`](https://cran.r-project.org/web/packages/brms/index.html)
+    that enables one to specify measurement error in a regression model.
 :::
 
 This post is mainly about the Standard Error of Measurement (SEM) metric
-estimated by Item Response Theory (IRT)/Rasch theta estimation tools, but since this will
-probably not be familiar to most readers I will to provide some
-additional information and context.
+estimated by Item Response Theory (IRT)/Rasch theta estimation tools,
+but since this will probably not be familiar to most readers I will to
+provide some additional information and context.
 
 I write this post primarily from the perspective of psychological
 measurement using questionnaires with multiple items to assess a latent
@@ -85,48 +84,71 @@ Second, the estimated SEM in Rasch/IRT varies across the latent
 continuum, it is not a constant point estimate, nor is it the same for
 every individual [@samejima1994]. The Fisher information function is
 used to estimate a standard error dependent on location on the latent
-continuum [@kreiner2012]. This is often described in a curve showing the Test Information Function (see @fig-tifexample). The connection between item threshold locations and TIF can also be seen by reviewing the targeting figure (@fig-targeting) and its middle section that aggregates the threshold locations.
+continuum [@kreiner2012]. This is often described in a curve showing the
+Test Information Function (see @fig-tifexample). The connection between
+item threshold locations and TIF can also be seen by reviewing the
+targeting figure (@fig-targeting) and its middle section that aggregates
+the threshold locations.
 
 To summarise, here are two things regarding CTT/CFA methods that are not
 unknown but very seldom discussed:
 
 -   reliability within CTT is sample dependent. You have most likely
     never read a CTT psychometrics paper that provides information about
-    the reliability of the measure or test itself. 
-      - This is due to the
-    inability of the measurement model to separate person and item
-    properties (see ["specific objectivity"](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22specific+objectivity%22)). 
-      - This is also a problem with IRT models with more than one parameter[^1].
+    the reliability of the measure or test itself.
+    -   This is due to the inability of the measurement model to
+        separate person and item properties (see ["specific
+        objectivity"](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22specific+objectivity%22)).
+    -   This is also a problem with IRT models with more than one
+        parameter[^1].
 -   reliability within CTT is always[^2] a constant value claimed to be
     the same for all participants at all levels of the latent variable.
     (I think this is an unreasonable assumption.)
-    
-There has been a lot of discussion within CTT about
-reliability metrics during the last 15 years or so, mostly justified
-critique of Cronbach’s alpha [i.e @sijtsma2008; @mcneish2018;
-@flora2020; @cortina2020]. But also mostly proposing other sample
-dependent metrics that provide a point estimate of reliability (some
-argue for also presenting some form of confidence interval).
 
-This is not to say that we should not talk about sample reliability, we absolutely should! But it is important to differentiate between test/measure properties and sample properties. This is particularly important in the context of psychometric analyses and the "validation" of measures, where the intent usually is for others to be able to make use of a measure.
-
-If you are interested in learning more about psychometrics and IRT/Rasch measurement models, you might find these resources helpful:
-
-- [Intro slides](https://pgmj.github.io/RaschIRTlecture/slides.html) that are rather verbose and should help clarify the basic concepts.
-- [Our preprint](https://doi.org/10.31219/osf.io/3htzc) on psychometric criteria, which also includes a Rasch psychometric analysis reporting checklist.
-- The [package vignette](https://pgmj.github.io/raschrvignette/RaschRvign.html) for the [`RISEkbmRasch`](https://github.com/pgmj/RISEkbmRasch) R package.
-
-[^1]: This is because the discrimination parameter (2PL, GRM, etc) is also sample
-    specific/dependent. See Stemler & Naples [-@stemler2021], figure 8,
-    for a nice explanation and case example. One exception exists for the 3PL model: if the pseudo-guessing parameter is constant across all items, sample
-    independence is upheld [@jiao2023].
+[^1]: This is because the discrimination parameter (2PL, GRM, etc) is
+    also sample specific/dependent. See Stemler & Naples
+    [-@stemler2021], figure 8, for a nice explanation and case example.
+    One exception exists for the 3PL model: if the pseudo-guessing
+    parameter is constant across all items, sample independence is
+    upheld [@jiao2023].
 
 [^2]: Except CME/BME methods [@kroc2020], but I have never seen those
     applied or reported in psychometric CTT papers.
 
+There has been a lot of discussion within CTT about reliability metrics
+during the last 15 years or so, mostly justified critique of Cronbach’s
+alpha [i.e @sijtsma2008; @mcneish2018; @flora2020; @cortina2020]. But
+also mostly proposing other sample dependent metrics that provide a
+point estimate of reliability (some argue for also presenting some form
+of confidence interval).
+
+This is not to say that we should not talk about sample reliability, we
+absolutely should! But it is important to differentiate between
+test/measure properties and sample properties. This is particularly
+important in the context of psychometric analyses and the "validation"
+of measures, where the intent usually is for others to be able to make
+use of a measure.
+
+If you are interested in learning more about psychometrics and IRT/Rasch
+measurement models, you might find these resources helpful:
+
+-   [Intro slides](https://pgmj.github.io/RaschIRTlecture/slides.html)
+    that are rather verbose and should help clarify the basic concepts.
+-   [Our preprint](https://doi.org/10.31219/osf.io/3htzc) on
+    psychometric criteria, which also includes a Rasch psychometric
+    analysis reporting checklist.
+-   The [package
+    vignette](https://pgmj.github.io/raschrvignette/RaschRvign.html) for
+    the [`RISEkbmRasch`](https://github.com/pgmj/RISEkbmRasch) R
+    package.
+
 ## Setup
 
-Many of the functions used in this post are available in my R package for Rasch analysis, [`RISEkbmRasch`](https://github.com/pgmj/RISEkbmRasch), including the function that simulates response data. The package is not available on CRAN, see below (or the link) for installation instructions.
+Many of the functions used in this post are available in my R package
+for Rasch analysis,
+[`RISEkbmRasch`](https://github.com/pgmj/RISEkbmRasch), including the
+function that simulates response data. The package is not available on
+CRAN, see below (or the link) for installation instructions.
 
 ```{r}
 # You need to use devtools or remotes to install the package from GitHub.
@@ -183,10 +205,14 @@ df <- df.all %>%
 RIscoreSE(df, score_range = c(-5,5))
 ```
 
-This provides us with a lookup table (@tbl-ordint) for transforming ordinal sum scores
-from the seven items to logit scores, with their respective SEM. Multiplying SEM by
-1.96 gives us a 95% confidence interval. Logit scores and SEM are
-estimated using the unbiased Weighted Likelihood method [@warm1989].
+This provides us with a lookup table (@tbl-ordint) for transforming
+ordinal sum scores from the seven items to logit scores, with their
+respective SEM. Multiplying SEM by 1.96 gives us a 95% confidence
+interval. Logit scores and SEM are estimated using the Weighted
+Likelihood (WL) method [@warm1989], which is less biased than estimation
+with Maximum Likelihood (ML). WL is virtually unbiased in the middle of
+the scale, while more biased than ML at extreme theta values
+[@kreiner2012].
 
 The lookup table works for respondents with complete response data. If
 you have respondents with missing responses the estimation method we
@@ -199,9 +225,8 @@ need for imputation.
 RIscoreSE(df, score_range = c(-5,5), output = "figure", error_multiplier = 1.96)
 ```
 
-@fig-ordint illustrates the transformation table
-information. We can also look at the SEM separately, across the latent
-variable continuum.
+@fig-ordint illustrates the transformation table information. We can
+also look at the SEM separately, across the latent variable continuum.
 
 ```{r}
 #| label: fig-sem
@@ -230,7 +255,11 @@ we'll look at the coverage of estimated values compared to the input
 vector of scores.
 
 ::: callout-note
-This is just a single simulated dataset for illustration, just as the regression example below also only uses one dataset. This is not a simulation study meant to show generalizable results. As such, the results should be interpreted with care. However, the code provided could be helpful if you want to conduct such as study.
+This is just a single simulated dataset for illustration, just as the
+regression example below also only uses one dataset. This is not a
+simulation study meant to show generalizable results. As such, the
+results should be interpreted with care. However, the code provided
+could be helpful if you want to conduct such as study.
 :::
 
 ### Input parameters
@@ -248,7 +277,9 @@ item_params
 
 ### Targeting
 
-Just to get a picture of how the item category thresholds are distributed, we can use the data from our paper to produce a targeting figure.
+Just to get a picture of how the item category thresholds are
+distributed, we can use the data from our paper to produce a targeting
+figure.
 
 ```{r}
 #| label: fig-targeting
@@ -256,7 +287,6 @@ Just to get a picture of how the item category thresholds are distributed, we ca
 
 RItargeting(df)
 ```
-
 
 ### Simulating data
 
@@ -342,7 +372,10 @@ sim_data %>%
   labs(x = "", y = "Theta (logit scale)")
 ```
 
-As you can see, the generated sample of "input_thetas" has a continuous gaussian distribution, while the estimated thetas are limited to certain values. This is due the the number and distribution of items and item category thresholds (see @fig-targeting).
+As you can see, the generated sample of "input_thetas" has a continuous
+gaussian distribution, while the estimated thetas are limited to certain
+values. This is due the the number and distribution of items and item
+category thresholds (see @fig-targeting).
 
 ### Coverage
 
@@ -408,7 +441,6 @@ sim_data %>%
        y = "Error")
 ```
 
-
 ```{r}
 sim_data %>% 
   mutate(absdiff = abs(est_thetas - input_thetas)) %>% 
@@ -431,12 +463,35 @@ sim_data %>%
 
 ## Regression with measurement error
 
-This is just exploratory, and I am no expert in Bayesian models, so please [let me know](mailto:magnus.p.johansson@ri.se) if something should be modified or if there are other models/tools that should be considered.
+This is just exploratory, and I am no expert in Bayesian models, so
+please [let me know](mailto:magnus.p.johansson@ri.se) if something
+should be modified or if there are other models/tools that should be
+considered.
 
-There is, as far as I know, no implementation of a frequentist regression tool in R that allows one to specify a vector of measurement errors. I have been looking into this recently and found some interesting R packages (`galamm`, `mecor`, and `simex`), but none seem to be (easily) applicable for this type of data and setup.
+There is, as far as I know, no implementation of a frequentist
+regression tool in R that allows one to specify a vector of measurement
+errors. I have been looking into this recently and found some
+interesting R packages (`galamm`, `mecor`, and `simex`), but none seem
+to be (easily) applicable for this type of data and setup. There are
+also reasonable arguments for using regression models that accomodate
+heteroscedastic errors [@wang2019] and this approach might be added to
+this text in a future revision.
 
-We'll simulate new data with two "time points", n = 200 each, that have mean
-theta locations 1 logit apart, SD = 1.5 for both groups, and ICC = 0.5. Then we'll run a mixed model. Since we only have two time points, we'll use random intercepts for id.
+Wang and colleagues [-@wang2019] state that:
+
+> It is known that ignoring the measurement error in $\hat{\theta}$ when
+> $\hat{\theta}$ is treated as a dependent variable still yields a
+> consistent and unbiased estimate of fixed effects (i.e.,
+> $\hat{\beta}$), but the standard error of $\hat{\beta}$ will be
+> inflated, and the random effects estimates (i.e.,
+> $\hat{\displaystyle\sum}_u$ ) as well as residual variances will be
+> distorted. (p.691)
+
+We'll simulate new data with two "time points", n = 200 each, that have
+mean theta locations 1 logit apart, SD = 1.5 for both groups, and ICC =
+0.5. Then we'll run a mixed model to see how well we can recover the
+input parameters. Since we only have two time points, we'll use random
+intercepts for id.
 
 ```{r}
 # randomly generated normal distributions of thetas with correlation
@@ -476,7 +531,6 @@ sim_data_g$est_sem <-
 
 sim_data_g <- cbind(sim_data_g,data_long)
 ```
-
 
 ```{r}
 sim_data_g %>% 
@@ -520,25 +574,36 @@ fig_input_theta_rain / fig_est_theta_rain +
 
 ### Models
 
-We'll first make some models without measurement error, both with `lmer()`
-and `brm()`. First with the input parameters to get a reference model for both.
+We'll first make some models without measurement error, both with
+`lmer()` and `brm()`. First with the input parameters to get a reference
+model for both.
 
-I learnt about measurement error and brms in this excellent online book by [Solomon Kurz](https://solomonkurz.netlify.app/):
+I learnt about measurement error and brms in this excellent online book
+by [Solomon Kurz](https://solomonkurz.netlify.app/):
 <https://bookdown.org/content/4857/missing-data-and-other-opportunities.html#measurement-error>
 
-There are three different ways to specify measurement error, `se()`, `mi()`, and `me()`, where the last one seems to only be relevant for when you have measurement error on both predictors and outcome. Thus, we will use the two others.
+There are three different ways to specify measurement error, `se()`,
+`mi()`, and `me()`, where the last one seems to only be relevant for
+when you have measurement error on both predictors and outcome. Thus, we
+will use the two others.
+
+#### lme4
 
 ```{r}
 
 # reference model with input thetas
 lm_fit0 <- lmer(input_theta ~ time + (1 | id),
-              data = sim_data_g)
+              data = sim_data_g, 
+              REML = TRUE)
 
 # estimated thetas
 lm_fit1 <- lmer(est_theta ~ time + (1 | id),
-              data = sim_data_g)
+              data = sim_data_g, 
+              REML = TRUE)
 
 ```
+
+#### brms
 
 ```{r}
 #| output: false
@@ -622,7 +687,6 @@ modelsummary(list("Reference model" = lm_fit0,
                   "Estimated thetas" = lm_fit1))
 ```
 
-
 ```{r}
 #| label: fig-lmresults
 #| fig-cap: Results from lmer() models
@@ -631,6 +695,7 @@ modelplot(list("Reference model" = lm_fit0,
 ```
 
 `brm()` models.
+
 ```{r}
 #| label: tbl-brmsresults
 #| tbl-cap: Results from brm() models
@@ -649,7 +714,6 @@ modelplot(list("Reference model" = b0_fit,
                   "With se()" = b2_fit,
                   "With mi()" = b3_fit))
 ```
-
 
 ## Software used
 
